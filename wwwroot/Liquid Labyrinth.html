@@ -1,0 +1,1403 @@
+<!doctype html>
+<head>
+<style>
+  #body{
+    margin: 0;
+  }
+  #print{
+    position: fixed;
+    top: 5px;
+    left: 300px;
+    z-index: 2;
+    color: grey;
+    font-weight: bold;
+  }
+  #canvas{
+    position: fixed;  
+    top: 0;
+    z-index: 1;
+  }
+
+  #dist{
+    position: fixed;
+    z-index: 2;
+    color: hsla(0,0%,0%,0);
+    font-weight: bold;
+  }
+  #play{
+    position: fixed;
+    text-align: center;
+    z-index: 2;
+    color: hsla(0,0%,0%,0);
+    font-weight: bold;
+  }
+  #instructions{
+    position: fixed;
+    text-align: center;
+    z-index: 2;
+    color: hsla(0,0%,0%,0);
+    font-weight: bold;
+  }
+  #newHighScore{
+    position: fixed;
+    text-align: center;
+    z-index: 2;
+    color: hsla(0,0%,0%,0);
+    font-weight: bold;
+  }
+  #finalDist{
+    position: fixed;
+    text-align: center;
+    z-index: 2;
+    color: hsla(0,0%,0%,0);
+    font-weight: bold;
+  }
+  #highScore{
+    position: fixed;
+    text-align: center;
+    z-index: 2;
+    color: hsla(0,0%,0%,0);
+    font-weight: bold;
+  }
+  #restart{
+    position: fixed;
+    text-align: center;
+    z-index: 2;
+    color: hsla(0,0%,0%,0);
+    font-weight: bold;
+  }
+</style>
+</head>
+<body id="body">
+<canvas id="canvas"></canvas>
+<div id="dist"></div>
+<div id="print"></div>
+<div id="play"></div>
+<div id="instructions"></div>
+<div id="newHighScore"></div>
+<div id="finalDist"></div>
+<div id="highScore"></div>
+<div id="restart"></div>
+<script>
+  
+  var canvas = document.getElementById('canvas');
+  var c = canvas.getContext('2d');
+
+  var width, height, halfWidth, halfHeight;
+  function resizeWindow(){
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    width = canvas.width;
+    height = canvas.height;
+    halfWidth = Math.round(width/2);
+    halfHeight = Math.round(height/2);
+  }resizeWindow();
+  
+  var inches = 118;
+  var feet = 12*inches;
+  var meters = 39.37*inches;
+  var seconds = 1000;
+  var minutes = 60*seconds;
+  var minTimePx = 5;
+  
+  var faceScreenDist = 1*feet;
+  
+  var fps = Math.min(60, seconds/minTimePx);
+  var timePx = seconds/fps;
+  
+  var print = document.getElementById('print');
+  function p  (info){print.innerHTML += info;}
+  function pln(info){print.innerHTML += "<br>" + info;}
+  function dp (info){print.innerHTML  = info;}
+
+  function background(r,g,b){
+    if(g === undefined){
+      c.strokeStyle = `rgb(${r},${r},${r})`;
+    }else{
+      c.strokeStyle = `rgb(${r},${g},${b})`;
+    }
+    c.lineWidth = width+1;
+    c.beginPath();
+    c.moveTo(halfWidth, 0);
+    c.lineTo(halfWidth, height);
+    c.stroke();
+  }
+  function stroke(r,g,b){
+    if(g === undefined){
+      c.strokeStyle = `rgb(${r},${r},${r})`;
+    }else{
+      c.strokeStyle = `rgb(${r},${g},${b})`;
+    }
+  }
+  function strokeHue(h,s,l,a){
+    if(s === undefined){
+      s = 100;
+      l = 50;
+    }
+    if(a === undefined){
+      a = 1;
+    }
+    c.strokeStyle = `hsla(${h},${s}%,${l}%,${a})`;
+  }
+  function fillHue(h,s,l,a){
+    if(s === undefined){
+      s = 100;
+      l = 50;
+    }
+    if(a === undefined){
+      a = 1;
+    }
+    c.fillStyle = `hsla(${h},${s}%,${l}%,${a})`;
+  }
+  function vectorMath(input1, sign, input2){
+    switch(sign){
+      case '.': return input1.x*input2.x + input1.y*input2.y + input1.t*input2.t;  //dot product
+      case '-': return new point(input1.x-input2.x, input1.y-input2.y, input1.z-input2.z);  //vector subtraction
+      case "to": return vectorMath(input2, '*', vectorMath(input1, 'u'));  //scales the vector input1 to the lenghth input2
+      case 'u': return vectorMath(input1, '/', vectorMath(input1, 'm'));  //unit vector
+      case 'm': return Math.sqrt(input1.x*input1.x + input1.y*input1.y);  //magnitude (length)
+      case '/': return new point(input1.x/input2, input1.y/input2);  //vector/scalar
+      case '*': return new point(input1*input2.x, input1*input2.y, input1*input2.z);  //scalar*vector
+      //case '+': return new point(input1.x+input2.x, input1.y+input2.y, input1.z+input2.z);  //vector addition
+      //case 'x': return new point(input1.y*input2.z-input2.y*input1.z, input1.z*input2.x-input2.z*input1.x, input1.x*input2.y-input2.x*input1.y);  //cross product
+      //case 'p': return vectorMath(vectorMath(input1, '.', input2) / vectorMath(input2, '.', input2), '*', input2)  //projection of the vector input1 onto the vector input2 (not tested)
+    }
+  }
+  function point(x,y,t){
+    this.x = x;
+    this.y = y;
+    this.t = t;
+  }
+  function uniqueNum(x,y){//2d spiral of natural numbers
+                                                // 5 4 3
+    var h = Math.max(Math.abs(x), Math.abs(y)); // 6 1 2
+    var l = Math.min(Math.abs(x), Math.abs(y)); // 7 8 9
+    if(-x===y && x > 0){
+      return (2*h+1)*(2*h+1);
+    }
+    var cont = true;
+    var uNum = (2*h-1)*(2*h-1);
+    if(Math.abs(y)>x || x===y&&x>0){
+      uNum += 2*h;
+    }else{
+      uNum += h+y;
+      cont = false;
+    }
+    if((Math.abs(x)>y || -x===y&&x<0) && cont){
+      uNum += 2*h;
+    }else if(cont){
+      uNum += h-x;
+      cont = false;
+    }
+    if((Math.abs(y)>-x || x===y&&x<0) && cont){
+      uNum += 2*h;
+    }else if(cont){
+      uNum += h-y;
+      cont = false;
+    }
+    if(cont){
+      uNum += h+x;
+    }
+    return uNum;
+  }
+
+  function seedRand(seed){
+    // LCG using GCC's constants
+    this.m = 2147483648; // 2^31;
+    this.a = 1103515245;
+    this.c = 12345;
+    this.seed = seed;
+    this.num();
+    this.num();
+    this.num();
+  }
+  seedRand.prototype.num = function(){
+    this.seed = (this.a*this.seed + this.c) % this.m;
+    return this.seed/this.m*2 - 1; //[-1,1)
+  }
+  function lawCos(p1,p2,p3){//returns angle at p1
+    var d1 = dist3d(p1,p2);
+    var d2 = dist3d(p2,p3);
+    var d3 = dist3d(p3,p1);
+    return Math.acos((d1*d1-d2*d2+d3*d3)/2/d1/d3);
+  }
+  function lineSegDamage(p1, p2){
+    var dx = p2.x-p1.x;
+    var dy = p2.y-p1.y;
+    var d1 = Math.sqrt(p1.x*p1.x + p1.y*p1.y);
+    var d2 = Math.sqrt(p2.x*p2.x + p2.y*p2.y);
+    var d3 = Math.sqrt(dx*dx + dy*dy);
+    if(d1 < playerR || d2 < playerR){
+      gotDamage = true;
+    }
+    var p1Angle = Math.acos((d1*d1-d2*d2+d3*d3)/2/d1/d3);
+    var distAlongLine = Math.cos(p1Angle)*d1; //nearest point along line from p1 to p2
+    if(distAlongLine > 0  &&  distAlongLine < d3){
+      if(Math.sin(p1Angle)*d1 < playerR){
+        gotDamage = true;
+      }
+    }
+  }
+  function lineEquation(lp1, lp2){  //is only being used for non-zero and non-infinate slopes
+                                        //takes line defined by lp1 and lp2 and returns the y value on that line at the x value of px
+    var slope = (lp2.y-lp1.y)/(lp2.x-lp1.x);
+    return lp1.y - slope*lp1.x; //yInt
+  }
+  function weight(value){
+    return value*value*(3-2*value);
+  }
+  function xyWeights(){
+    for(var sy = 0; sy < boxAccuracy; sy++){
+      sampPoints2d[sy] = [];
+      for(var sx = 0; sx < boxAccuracy; sx++){
+        var reletiveX = sx/boxAccuracy;
+        var reletiveY = sy/boxAccuracy;
+        var bottom = weight(1-reletiveY);
+        var top = weight(reletiveY);
+        var left = weight(1-reletiveX);
+        var right = weight(reletiveX);
+
+        sampPoints2d[sy][sx] = [bottom*left, bottom*right, top*right, top*left];
+      }
+    }
+  }
+  function formBox(x, y, thisBox, lastXbox, lastYbox, lastXYbox){
+    var realPt = new point(halfWidth+x*boxDim-viewerCoord.x, halfHeight-y*boxDim+viewerCoord.y);
+    var mpt = new point(x*boxDim-viewerCoord.x, y*boxDim-viewerCoord.y);
+    
+    var possibleCollision = false;
+    if(playable && !gotDamage){
+      if(mpt.x+halfLilBoxDim > -playerR && mpt.x-lilBoxDim < playerR){
+        if(mpt.y+halfLilBoxDim > -playerR && mpt.y-lilBoxDim < playerR){
+          possibleCollision = true;
+        }
+      }
+    }
+
+    if(thisBox){
+      var margin = 0.5;
+      if(lastXbox && lastYbox || lastXYbox){
+        c.lineWidth = midBoxWidth;
+        c.beginPath();
+        c.moveTo(realPt.x-3*midBoxDim-margin, realPt.y+3*midBoxDim+margin);
+        c.lineTo(realPt.x+midBoxDim+margin, realPt.y-midBoxDim-margin);
+        c.stroke();
+        if(possibleCollision){
+          var p1 = new point(mpt.x+halfLilBoxDim, mpt.y);
+          var p2 = new point(mpt.x, mpt.y+halfLilBoxDim);
+          var p3 = new point(mpt.x-lilBoxDim, mpt.y-halfLilBoxDim);
+          var p4 = new point(mpt.x-halfLilBoxDim, mpt.y-lilBoxDim);
+          lineSegDamage(p1, p2);
+          lineSegDamage(p2, p3);
+          lineSegDamage(p3, p4);
+          lineSegDamage(p4, p1);
+          if(!gotDamage){ //these are only necessary for detecting collisions when playerR is small enough to fit inbetween the lineSegs. So this is a technicality
+            if(lineEquation(p1,p2)>0 && lineEquation(p2,p3)>0 && lineEquation(p3,p4)<0 && lineEquation(p4,p1)<0){
+              gotDamage = true;
+            }
+          }
+        }
+      }else{
+        c.lineWidth = midBoxWidth;
+        c.beginPath();
+        c.moveTo(realPt.x-midBoxDim-margin, realPt.y+midBoxDim+margin);
+        c.lineTo(realPt.x+midBoxDim+margin, realPt.y-midBoxDim-margin);
+        c.stroke();
+        if(possibleCollision){
+          var p1 = new point(mpt.x+halfLilBoxDim, mpt.y);
+          var p2 = new point(mpt.x, mpt.y+halfLilBoxDim);
+          var p3 = new point(mpt.x-halfLilBoxDim, mpt.y);
+          var p4 = new point(mpt.x, mpt.y-halfLilBoxDim);
+          lineSegDamage(p1, p2);
+          lineSegDamage(p2, p3);
+          lineSegDamage(p3, p4);
+          lineSegDamage(p4, p1);
+          if(!gotDamage){
+            if(lineEquation(p1,p2)>0 && lineEquation(p2,p3)>0 && lineEquation(p3,p4)<0 && lineEquation(p4,p1)<0){
+              gotDamage = true;
+            }
+          }
+        }
+      }
+      if(lastXbox){
+        c.lineWidth = lilBoxDim+1;
+        c.beginPath();
+        c.moveTo(realPt.x, realPt.y);
+        c.lineTo(realPt.x-lilBoxDim-1, realPt.y);
+        c.stroke();
+        if(possibleCollision){
+          var p1 = new point(mpt.x, mpt.y+halfLilBoxDim);
+          var p2 = new point(mpt.x-lilBoxDim, mpt.y+halfLilBoxDim);
+          var p3 = new point(mpt.x-lilBoxDim, mpt.y-halfLilBoxDim);
+          var p4 = new point(mpt.x, mpt.y-halfLilBoxDim);
+          lineSegDamage(p1, p2);
+          lineSegDamage(p2, p3);
+          lineSegDamage(p3, p4);
+          lineSegDamage(p4, p1);
+          if(!gotDamage){
+            if(p1.x>0 && p2.x<0 && p1.y>0 && p3.y<0){
+              gotDamage = true;
+            }
+          }
+        }
+      }
+      if(lastYbox){
+        c.lineWidth = lilBoxDim+1;
+        c.beginPath();
+        c.moveTo(realPt.x, realPt.y);
+        c.lineTo(realPt.x, realPt.y+lilBoxDim+1);
+        c.stroke();
+        if(possibleCollision){
+          var p1 = new point(mpt.x+halfLilBoxDim, mpt.y);
+          var p2 = new point(mpt.x-halfLilBoxDim, mpt.y);
+          var p3 = new point(mpt.x-halfLilBoxDim, mpt.y-lilBoxDim);
+          var p4 = new point(mpt.x+halfLilBoxDim, mpt.y-lilBoxDim);
+          lineSegDamage(p1, p2);
+          lineSegDamage(p2, p3);
+          lineSegDamage(p3, p4);
+          lineSegDamage(p4, p1);
+          if(!gotDamage){
+            if(p1.x>0 && p2.x<0 && p1.y>0 && p3.y<0){
+              gotDamage = true;
+            }
+          }
+        }
+      }
+    }else{
+      if(lastXbox && lastYbox){
+        c.lineWidth = midBoxWidth;
+        c.beginPath();
+        c.moveTo(realPt.x-midBoxDim-halfLilBoxDim, realPt.y-midBoxDim+halfLilBoxDim);
+        c.lineTo(realPt.x+midBoxDim-halfLilBoxDim, realPt.y+midBoxDim+halfLilBoxDim);
+        c.stroke();
+        if(possibleCollision){
+          var p1 = new point(mpt.x, mpt.y-halfLilBoxDim);
+          var p2 = new point(mpt.x-halfLilBoxDim, mpt.y);
+          var p3 = new point(mpt.x-lilBoxDim, mpt.y-halfLilBoxDim);
+          var p4 = new point(mpt.x-halfLilBoxDim, mpt.y-lilBoxDim);
+          lineSegDamage(p1, p2);
+          lineSegDamage(p2, p3);
+          lineSegDamage(p3, p4);
+          lineSegDamage(p4, p1);
+          if(!gotDamage){
+            if(lineEquation(p1,p2)>0 && lineEquation(p2,p3)>0 && lineEquation(p3,p4)<0 && lineEquation(p4,p1)<0){
+              gotDamage = true;
+            }
+          }
+        }
+      }
+    }    
+  }
+  function mapStage(stage, manualScreen){
+    stroke(0);
+    var t,st;
+    if(stage === 3 || stage === 4){
+      var tPix = viewerCoord.t/boxT;
+      t = Math.floor(tPix);
+      st = tPix % 1;
+    }else{
+      t = Math.floor(transitionStartT/transitionBoxT);
+      st = transitionT/transitionBoxT;
+    }
+
+    var sampPoints3d = [];
+    for(var sy = 0; sy < boxAccuracy; sy++){
+      sampPoints3d[sy] = [];
+      for(var sx = 0; sx < boxAccuracy; sx++){
+        var oppositeT = 1 - st;
+        sampPoints3d[sy][sx] = [weight(oppositeT)*sampPoints2d[sy][sx][0], weight(oppositeT)*sampPoints2d[sy][sx][1], weight(oppositeT)*sampPoints2d[sy][sx][2], weight(oppositeT)*sampPoints2d[sy][sx][3], weight(st)*sampPoints2d[sy][sx][0], weight(st)*sampPoints2d[sy][sx][1], weight(st)*sampPoints2d[sy][sx][2], weight(st)*sampPoints2d[sy][sx][3]];
+      }
+    }
+
+    var yStart = Math.floor((viewerCoord.y-halfHeight)/boxDim);
+    var yStop = Math.ceil((viewerCoord.y+halfHeight)/boxDim);
+    var xStart = Math.floor((viewerCoord.x-halfWidth)/boxDim);
+    var xStop = Math.ceil((viewerCoord.x+halfWidth)/boxDim);
+
+    var yPos = 0;
+    var wholeRow = [];
+    var TRcorners = [];
+    var lastColumn = [];
+
+    for(var y = yStart; y <= yStop; y++){
+      var offsetY = y - yStart;
+      var syStart = Math.max(Math.floor((viewerCoord.y-halfHeight)/lilBoxDim-y*boxAccuracy), 0);
+      var syStop = Math.min(Math.ceil((viewerCoord.y+halfHeight)/lilBoxDim-y*boxAccuracy)+1, boxAccuracy);
+      var xPos = 0;
+      for(var x = xStart; x <= xStop; x++){
+        var offsetX = x - xStart;
+        var sxStart = Math.max(Math.floor((viewerCoord.x-halfWidth)/lilBoxDim-x*boxAccuracy), 0);
+        var sxStop = Math.min(Math.ceil((viewerCoord.x+halfWidth)/lilBoxDim-x*boxAccuracy)+1, boxAccuracy);
+
+        var rand;
+        var vectorBL,vectorBR,vectorTR,vectorTL;
+        var vectorBLU,vectorBRU,vectorTRU,vectorTLU;
+        var startBL,startBR,startTR,startTL;
+        var startBLU,startBRU,startTRU,startTLU;
+        switch(stage){
+          case 0:
+            rand = new seedRand(uniqueNum(uniqueNum(x,y),t));
+              vectorBLU = new point(rand.num(), rand.num(), rand.num());
+              startBLU = rand.num()*startStrength;
+            rand = new seedRand(uniqueNum(uniqueNum(x+1,y),t));
+              vectorBRU = new point(rand.num(), rand.num(), rand.num());
+              startBRU = rand.num()*startStrength;
+            rand = new seedRand(uniqueNum(uniqueNum(x+1,y+1),t));
+              vectorTRU = new point(rand.num(), rand.num(), rand.num());
+              startTRU = rand.num()*startStrength;
+            rand = new seedRand(uniqueNum(uniqueNum(x,y+1),t));
+              vectorTLU = new point(rand.num(), rand.num(), rand.num());
+              startTLU = rand.num()*startStrength;
+            break;
+          case 1:
+            rand = new seedRand(uniqueNum(uniqueNum(x,y),t));
+              vectorBL = new point(rand.num(), rand.num(), rand.num());
+              startBL = rand.num()*startStrength;
+            rand = new seedRand(uniqueNum(uniqueNum(x+1,y),t));
+              vectorBR = new point(rand.num(), rand.num(), rand.num());
+              startBR = rand.num()*startStrength;
+            rand = new seedRand(uniqueNum(uniqueNum(x+1,y+1),t));
+              vectorTR = new point(rand.num(), rand.num(), rand.num());
+              startTR = rand.num()*startStrength;
+            rand = new seedRand(uniqueNum(uniqueNum(x,y+1),t));
+              vectorTL = new point(rand.num(), rand.num(), rand.num());
+              startTL = rand.num()*startStrength;
+            break;
+          case 2:
+            var vt = Math.floor(viewerCoord.t/boxT);
+            rand = new seedRand(uniqueNum(uniqueNum(x,y),vt));
+              vectorBLU = new point(rand.num(), rand.num(), rand.num());
+              startBLU = rand.num()*startStrength;
+            rand = new seedRand(uniqueNum(uniqueNum(x+1,y),vt));
+              vectorBRU = new point(rand.num(), rand.num(), rand.num());
+              startBRU = rand.num()*startStrength;
+            rand = new seedRand(uniqueNum(uniqueNum(x+1,y+1),vt));
+              vectorTRU = new point(rand.num(), rand.num(), rand.num());
+              startTRU = rand.num()*startStrength;
+            rand = new seedRand(uniqueNum(uniqueNum(x,y+1),vt));
+              vectorTLU = new point(rand.num(), rand.num(), rand.num());
+              startTLU = rand.num()*startStrength;
+            break;
+          case 3:
+            rand = new seedRand(uniqueNum(uniqueNum(x,y),t));
+              vectorBL = new point(rand.num(), rand.num(), rand.num());
+              startBL = rand.num()*startStrength;
+            rand = new seedRand(uniqueNum(uniqueNum(x+1,y),t));
+              vectorBR = new point(rand.num(), rand.num(), rand.num());
+              startBR = rand.num()*startStrength;
+            rand = new seedRand(uniqueNum(uniqueNum(x+1,y+1),t));
+              vectorTR = new point(rand.num(), rand.num(), rand.num());
+              startTR = rand.num()*startStrength;
+            rand = new seedRand(uniqueNum(uniqueNum(x,y+1),t));
+              vectorTL = new point(rand.num(), rand.num(), rand.num());
+              startTL = rand.num()*startStrength;
+
+            rand = new seedRand(uniqueNum(uniqueNum(x,y),t+1));
+              vectorBLU = new point(rand.num(), rand.num(), rand.num());
+              startBLU = rand.num()*startStrength;
+            rand = new seedRand(uniqueNum(uniqueNum(x+1,y),t+1));
+              vectorBRU = new point(rand.num(), rand.num(), rand.num());
+              startBRU = rand.num()*startStrength;
+            rand = new seedRand(uniqueNum(uniqueNum(x+1,y+1),t+1));
+              vectorTRU = new point(rand.num(), rand.num(), rand.num());
+              startTRU = rand.num()*startStrength;
+            rand = new seedRand(uniqueNum(uniqueNum(x,y+1),t+1));
+              vectorTLU = new point(rand.num(), rand.num(), rand.num());
+              startTLU = rand.num()*startStrength;
+            break;
+          case 4:
+            rand = new seedRand(uniqueNum(uniqueNum(x,y),t));
+              vectorBL = new point(rand.num(), rand.num(), rand.num());
+              startBL = rand.num()*startStrength;
+            rand = new seedRand(uniqueNum(uniqueNum(x+1,y),t));
+              vectorBR = new point(rand.num(), rand.num(), rand.num());
+              startBR = rand.num()*startStrength;
+            rand = new seedRand(uniqueNum(uniqueNum(x+1,y+1),t));
+              vectorTR = new point(rand.num(), rand.num(), rand.num());
+              startTR = rand.num()*startStrength;
+            rand = new seedRand(uniqueNum(uniqueNum(x,y+1),t));
+              vectorTL = new point(rand.num(), rand.num(), rand.num());
+              startTL = rand.num()*startStrength;
+            break;
+          case 5:
+            var vt = Math.floor(viewerCoord.t/boxT);
+            rand = new seedRand(uniqueNum(uniqueNum(x,y),vt));
+              vectorBLU = new point(rand.num(), rand.num(), rand.num());
+              startBLU = rand.num()*startStrength;
+            rand = new seedRand(uniqueNum(uniqueNum(x+1,y),vt));
+              vectorBRU = new point(rand.num(), rand.num(), rand.num());
+              startBRU = rand.num()*startStrength;
+            rand = new seedRand(uniqueNum(uniqueNum(x+1,y+1),vt));
+              vectorTRU = new point(rand.num(), rand.num(), rand.num());
+              startTRU = rand.num()*startStrength;
+            rand = new seedRand(uniqueNum(uniqueNum(x,y+1),vt));
+              vectorTLU = new point(rand.num(), rand.num(), rand.num());
+              startTLU = rand.num()*startStrength;
+            break;
+          }
+
+        if(!yPos){
+          wholeRow[xPos] = [];
+        }
+        var localRow = wholeRow[xPos];
+        var lastXbox;
+        var localY = 0;
+        for(var sy = syStart; sy < syStop; sy++){
+          var localX = 0;
+          var temp = lastXbox;
+          lastXbox = lastColumn[localY];
+          var lastXYbox;
+          if(localY){
+             lastXYbox = lastColumn[localY-1];
+          }
+          lastColumn[localY-1] = temp;
+          for(var sx = sxStart; sx < sxStop; sx++){
+            var negX = -sx/boxAccuracy;
+            var oppX = 1+negX;
+            var negY = -sy/boxAccuracy;
+            var oppY = 1+negY;
+            var negT = -st;
+            var oppT = 1+negT;
+
+            var disVecBL = new point(negX, negY, negT);
+            var disVecBR = new point(oppX, negY, negT);
+            var disVecTR = new point(oppX, oppY, negT);
+            var disVecTL = new point(negX, oppY, negT);
+
+            var disVecBLU = new point(negX, negY, oppT);
+            var disVecBRU = new point(oppX, negY, oppT);
+            var disVecTRU = new point(oppX, oppY, oppT);
+            var disVecTLU = new point(negX, oppY, oppT);
+
+            var valBL,valBR,valTR,valTL;
+            var valBLU,valBRU,valTRU,valTLU;
+            
+            switch(stage){
+              case 0:
+                valBL = blank;
+                valBR = blank;
+                valTR = blank;
+                valTL = blank;
+
+                valBLU = vectorMath(disVecBLU, '.', vectorBLU) + startBLU;
+                valBRU = vectorMath(disVecBRU, '.', vectorBRU) + startBRU;
+                valTRU = vectorMath(disVecTRU, '.', vectorTRU) + startTRU;
+                valTLU = vectorMath(disVecTLU, '.', vectorTLU) + startTLU;
+                break;
+              case 1:
+                valBL = vectorMath(disVecBL, '.', vectorBL) + startBL;
+                valBR = vectorMath(disVecBR, '.', vectorBR) + startBR;
+                valTR = vectorMath(disVecTR, '.', vectorTR) + startTR;
+                valTL = vectorMath(disVecTL, '.', vectorTL) + startTL;
+                var notDefined = true;
+                if(startLiquidText!==undefined){
+                  if(startLiquidText[offsetY]!==undefined){
+                    if(startLiquidText[offsetY][offsetX]!==undefined){
+                      if(startLiquidText[offsetY][offsetX][sy]!==undefined){
+                        if(startLiquidText[offsetY][offsetX][sy][sx]!==undefined){
+                          notDefined = false;
+                          valBLU = valBRU = valTRU = valTLU = wall;
+                        }
+                      }
+                    }
+                  }
+                }
+                if(notDefined){
+                  valBLU = valBRU = valTRU = valTLU = blank;
+                }
+                break;
+              case 2:
+                var notDefined = true;
+                if(startLiquidText!==undefined){
+                  if(startLiquidText[offsetY]!==undefined){
+                    if(startLiquidText[offsetY][offsetX]!==undefined){
+                      if(startLiquidText[offsetY][offsetX][sy]!==undefined){
+                        if(startLiquidText[offsetY][offsetX][sy][sx]!==undefined){
+                          notDefined = false;
+                          valBL = valBR = valTR = valTL = wall;
+                        }
+                      }
+                    }
+                  }
+                }
+                if(notDefined){
+                  valBL = valBR = valTR = valTL = blank;
+                }
+
+                valBLU = vectorMath(disVecBLU, '.', vectorBLU) + startBLU;
+                valBRU = vectorMath(disVecBRU, '.', vectorBRU) + startBRU;
+                valTRU = vectorMath(disVecTRU, '.', vectorTRU) + startTRU;
+                valTLU = vectorMath(disVecTLU, '.', vectorTLU) + startTLU;
+                break;
+              case 3:
+                valBL = vectorMath(disVecBL, '.', vectorBL) + startBL;
+                valBR = vectorMath(disVecBR, '.', vectorBR) + startBR;
+                valTR = vectorMath(disVecTR, '.', vectorTR) + startTR;
+                valTL = vectorMath(disVecTL, '.', vectorTL) + startTL;
+
+                valBLU = vectorMath(disVecBLU, '.', vectorBLU) + startBLU;
+                valBRU = vectorMath(disVecBRU, '.', vectorBRU) + startBRU;
+                valTRU = vectorMath(disVecTRU, '.', vectorTRU) + startTRU;
+                valTLU = vectorMath(disVecTLU, '.', vectorTLU) + startTLU;
+                break;
+              case 4:
+                valBL = vectorMath(disVecBL, '.', vectorBL) + startBL;
+                valBR = vectorMath(disVecBR, '.', vectorBR) + startBR;
+                valTR = vectorMath(disVecTR, '.', vectorTR) + startTR;
+                valTL = vectorMath(disVecTL, '.', vectorTL) + startTL;
+
+                var notDefined = true;
+                if(deathLiquidText!==undefined){
+                  if(deathLiquidText[offsetY]!==undefined){
+                    if(deathLiquidText[offsetY][offsetX]!==undefined){
+                      if(deathLiquidText[offsetY][offsetX][sy]!==undefined){
+                        if(deathLiquidText[offsetY][offsetX][sy][sx]!==undefined){
+                          notDefined = false;
+                          valBLU = valBRU = valTRU = valTLU = wall;
+                        }
+                      }
+                    }
+                  }
+                }
+                if(notDefined){
+                  valBLU = valBRU = valTRU = valTLU = blank;
+                }
+                break;
+              case 5:
+                var notDefined = true;
+                if(deathLiquidText!==undefined){
+                  if(deathLiquidText[offsetY]!==undefined){
+                    if(deathLiquidText[offsetY][offsetX]!==undefined){
+                      if(deathLiquidText[offsetY][offsetX][sy]!==undefined){
+                        if(deathLiquidText[offsetY][offsetX][sy][sx]!==undefined){
+                          notDefined = false;
+                          valBL = valBR = valTR = valTL = wall;
+                        }
+                      }
+                    }
+                  }
+                }
+                if(notDefined){
+                  valBL = valBR = valTR = valTL = blank;
+                }
+
+                valBLU = vectorMath(disVecBLU, '.', vectorBLU) + startBLU;
+                valBRU = vectorMath(disVecBRU, '.', vectorBRU) + startBRU;
+                valTRU = vectorMath(disVecTRU, '.', vectorTRU) + startTRU;
+                valTLU = vectorMath(disVecTLU, '.', vectorTLU) + startTLU;
+                break;
+            }
+            
+            var sp = sampPoints3d[sy][sx];
+            
+            var value = valBL*sp[0] + valBR*sp[1] + valTR*sp[2] + valTL*sp[3] + valBLU*sp[4] + valBRU*sp[5] + valTRU*sp[6] + valTLU*sp[7];
+
+            var thisBox = false;
+            if(value > wallThreshold){
+              thisBox = true;
+            }
+            lastYbox = localRow[localX];
+            formBox(x-negX, y-negY, thisBox, lastXbox, lastYbox, lastXYbox);
+            lastXbox = thisBox;
+            lastXYbox = lastYbox;
+            localRow[localX] = thisBox;
+            localX++;
+          }
+          localY++;
+        }
+        lastXYbox = TRcorners[xPos];
+        TRcorners[xPos] = lastXbox;
+        lastColumn[localY-1] = lastXbox;
+        xPos++;
+        sxStart = 0;
+      }
+      yPos++;
+      syStart = 0;
+    }
+  }
+  function updateViewer(){
+    viewerCoord.t += deltaTime;
+    if(health > healthMax){
+      health = Math.max(health-shieldDegrade*deltaTime, healthMax);
+    }else{
+      health = Math.min(health+healthRecharge*deltaTime, healthMax);
+    }
+    if(right && !left){
+      if(up && !down){
+        viewerCoord.x += diagonalMoveAmount*deltaTime;
+        viewerCoord.y += diagonalMoveAmount*deltaTime;
+      }else if(down && !up){
+        viewerCoord.x += diagonalMoveAmount*deltaTime;
+        viewerCoord.y -= diagonalMoveAmount*deltaTime;
+      }
+      else{
+        viewerCoord.x += moveSpeed*deltaTime;
+      }
+    }else if(left && !right){
+      if(up && !down){
+        viewerCoord.x -= diagonalMoveAmount*deltaTime;
+        viewerCoord.y += diagonalMoveAmount*deltaTime;
+      }else if(down && !up){
+        viewerCoord.x -= diagonalMoveAmount*deltaTime;
+        viewerCoord.y -= diagonalMoveAmount*deltaTime;
+      }
+      else{
+        viewerCoord.x -= moveSpeed*deltaTime;
+      }
+    }else if(up && !down){
+      viewerCoord.y += moveSpeed*deltaTime;
+    }else if(down && !up){
+      viewerCoord.y -= moveSpeed*deltaTime;
+    }
+  }
+  function drawViewer(){
+    var viewerDirection = vectorMath(vectorMath(viewerCoord,'-',startCoord), 'to', playerR);
+    fillHue(playerHue, 100, 25, playerFade);
+    c.beginPath();
+    c.arc(halfWidth-viewerDirection.x, halfHeight+viewerDirection.y, playerR/4, 0, 6.3);
+    c.fill();
+
+    c.lineWidth = playerR;
+    strokeHue(playerHue, 100, 50, playerFade);
+    c.beginPath();
+    c.arc(halfWidth, halfHeight, playerR/2, 0, 6.3);
+    c.stroke();
+
+    if(health > healthMax){
+      c.lineWidth = playerR*3/2;
+      strokeHue(shieldHue,100,50,0.5*playerFade);
+      c.beginPath();
+      c.arc(halfWidth, halfHeight, playerR*3/4, Math.PI*2-health, 0);
+      c.stroke();
+    }else{
+      c.lineWidth = playerR/2;
+      strokeHue(damageHue, 100, 50, playerFade);
+      c.beginPath();
+      c.arc(halfWidth, halfHeight, playerR/2, 0, Math.PI*2-health);
+      c.stroke();
+    }
+  }
+  function newT(){
+    return Math.floor((new seedRand(new Date().getTime()).num()+1)*10000000000/boxT)*boxT;
+  }
+  function liquidLine(a,b, c,d, w){
+    var r = w/2;
+    var slope = (c-a)/(d-b);
+
+    var ly,gy,x1;
+    if(b < d){
+      ly = b;
+      gy = d;
+      x1 = a;
+    }else{
+      ly = d;
+      gy = b;
+      if(d < b){
+        x1 = c;
+      }else{
+        x1 = Math.min(a,c);
+      }
+    }
+    var lx = Math.min(a,c);
+    var gx = Math.max(a,c);
+
+    var realYstart = Math.floor((viewerCoord.y-halfHeight)/boxDim);
+    var realXstart = Math.floor((viewerCoord.x-halfWidth)/boxDim);
+    var yStart = Math.floor((viewerCoord.y+ly-r)/boxDim)-1;
+    var yStop = Math.ceil((viewerCoord.y+gy+r)/boxDim)+1;
+
+    for(var y = yStart; y <= yStop; y++){
+      var offsetY = y - realYstart;
+      var dy = y*boxDim - viewerCoord.y-ly;
+      var innerVal;
+      if(slope === Infinity){
+        innerVal = viewerCoord.x+lx;
+      }else{
+        innerVal = viewerCoord.x+x1+dy*slope;
+      }
+      var xStart = Math.floor((innerVal-r)/boxDim)-1;
+      if(slope === Infinity){innerVal = viewerCoord.x+gx;}
+      var xStop = Math.ceil((innerVal+r)/boxDim)+1;
+      switch(string){
+        case 0: if(startLiquidText[offsetY]===undefined){startLiquidText[offsetY] = [];}break;
+        case 1: if(deathLiquidText[offsetY]===undefined){deathLiquidText[offsetY] = [];}break;
+      }
+      for(var x = xStart; x <= xStop; x++){
+        var offsetX = x - realXstart;
+        var syStart = Math.max(Math.floor((viewerCoord.y+ly-r)/lilBoxDim-y*boxAccuracy),0);
+        var syStop = Math.min(Math.ceil((viewerCoord.y+gy+r)/lilBoxDim-y*boxAccuracy),boxAccuracy);
+        
+        switch(string){
+          case 0: if(startLiquidText[offsetY][offsetX]===undefined){startLiquidText[offsetY][offsetX] = [];}break;
+          case 1: if(deathLiquidText[offsetY][offsetX]===undefined){deathLiquidText[offsetY][offsetX] = [];}break;
+        }
+        for(var sy = syStart; sy <= syStop; sy++){
+          var dsy = sy*lilBoxDim + y*boxDim - viewerCoord.y-ly;
+          if(slope === Infinity){
+            innerVal = viewerCoord.x+lx;
+          }else{
+            innerVal = viewerCoord.x+x1+dsy*slope;
+          }
+          var sxStart = Math.max(Math.floor((innerVal-r)/lilBoxDim-x*boxAccuracy),0);
+          if(slope === Infinity){innerVal = viewerCoord.x+gx;}
+          var sxStop = Math.min(Math.ceil((innerVal+r)/lilBoxDim-x*boxAccuracy),boxAccuracy);
+          switch(string){
+            case 0: if(startLiquidText[offsetY][offsetX][sy]===undefined){startLiquidText[offsetY][offsetX][sy] = [];}break;
+            case 1: if(deathLiquidText[offsetY][offsetX][sy]===undefined){deathLiquidText[offsetY][offsetX][sy] = [];}break;
+          }
+          for(var sx = sxStart; sx <= sxStop; sx++){
+            switch(string){
+              case 0: startLiquidText[offsetY][offsetX][sy][sx] = 1;break;
+              case 1: deathLiquidText[offsetY][offsetX][sy][sx] = 1;break;
+            }
+          }
+        }
+      }
+    }
+  }
+  function liquidEllipse(cx,cy, xr, yr){
+    var realYstart = Math.floor((viewerCoord.y-halfHeight)/boxDim);
+    var realXstart = Math.floor((viewerCoord.x-halfWidth)/boxDim);
+    var yStart = Math.floor((viewerCoord.y+cy-yr)/boxDim)-1;
+    var yStop = Math.ceil((viewerCoord.y+cy+yr)/boxDim)+1;
+    for(var y = yStart; y <= yStop; y++){
+      var offsetY = y - realYstart;
+      var cyDif = y*boxDim-viewerCoord.y-cy;
+      var reletiveR2 = xr*xr*(1-cyDif*cyDif/yr/yr);
+      if(reletiveR2<0){reletiveR2 = 0;}
+      var xStart = Math.floor((viewerCoord.x+cx-Math.sqrt(reletiveR2))/boxDim)-1;
+      var xStop = Math.ceil((viewerCoord.x+cx+Math.sqrt(reletiveR2))/boxDim)+1;
+      switch(string){
+        case 0: if(startLiquidText[offsetY]===undefined){startLiquidText[offsetY] = [];}break;
+        case 1: if(deathLiquidText[offsetY]===undefined){deathLiquidText[offsetY] = [];}break;
+      }
+      for(var x = xStart; x <= xStop; x++){
+        var offsetX = x - realXstart;
+        var syStart = Math.max(Math.floor((viewerCoord.y+cy-yr)/lilBoxDim-y*boxAccuracy),0);
+        var syStop = Math.min(Math.ceil((viewerCoord.y+cy+yr)/lilBoxDim-y*boxAccuracy),boxAccuracy);
+        
+        switch(string){
+          case 0: if(startLiquidText[offsetY][offsetX]===undefined){startLiquidText[offsetY][offsetX] = [];}break;
+          case 1: if(deathLiquidText[offsetY][offsetX]===undefined){deathLiquidText[offsetY][offsetX] = [];}break;
+        }
+        for(var sy = syStart; sy <= syStop; sy++){
+          cyDif = y*boxDim+sy*lilBoxDim-viewerCoord.y-cy;
+          reletiveR2 = xr*xr*(1-cyDif*cyDif/yr/yr);
+          if(reletiveR2<0){reletiveR2 = 0;}
+          var sxStart = Math.max(Math.floor((viewerCoord.x+cx-Math.sqrt(reletiveR2))/lilBoxDim-x*boxAccuracy),0);
+          var sxStop = Math.min(Math.ceil((viewerCoord.x+cx+Math.sqrt(reletiveR2))/lilBoxDim-x*boxAccuracy),boxAccuracy);
+          switch(string){
+            case 0: if(startLiquidText[offsetY][offsetX][sy]===undefined){startLiquidText[offsetY][offsetX][sy] = [];}break;
+            case 1: if(deathLiquidText[offsetY][offsetX][sy]===undefined){deathLiquidText[offsetY][offsetX][sy] = [];}break;
+          }
+          for(var sx = sxStart; sx <= sxStop; sx++){
+            switch(string){
+              case 0: startLiquidText[offsetY][offsetX][sy][sx] = 1;break;
+              case 1: deathLiquidText[offsetY][offsetX][sy][sx] = 1;break;
+            }
+          }
+        }
+      }
+    }
+  }
+  function liquidText(){
+    var upperWidth = 0.08;
+    var lowerWidth = 0.07;
+    var upperHeight = 0.3;
+    var lowerHeight = 0.3;
+
+    var Lwidth = 1;
+    var iWidth = 0.003;
+    var qWidth = 1;
+    var uWidth = 0.8;
+    var dWidth = 1;
+
+    var aWidth = 1;
+    var bWidth = 0.8;
+    var yWidth = 1;
+    var rWidth = 1;
+    var nWidth = 0.8;
+    var tWidth = 0.7;
+    var hWidth = 0.8;
+
+    var Ywidth = 1;
+    var oWidth = 1;
+    var _width = 1;
+    var Dwidth = 1;
+    var eWidth = 1;
+
+    var upperLineWidth = 0;//0.02;
+    var lowerLineWidth = 0;//0.018;
+
+    var columnSpace = 0.05;
+    var rowSpace = 0.12;
+    var cursor;
+                                //the cursor point is at the bottom left of the letters being drawn
+    function L(){
+      liquidLine(cursor.x,cursor.y, cursor.x,cursor.y+upperHeight*height, upperLineWidth*width);
+      liquidLine(cursor.x,cursor.y, cursor.x+Lwidth*upperWidth*width,cursor.y, upperLineWidth*height*2);
+      cursor.x += Lwidth*upperWidth*width + columnSpace*width;
+    }
+    function i(){
+      liquidLine(cursor.x,cursor.y, cursor.x,cursor.y+lowerHeight*halfHeight, lowerLineWidth*width);
+      cursor.x += iWidth*lowerWidth*width + columnSpace*width;
+    }
+    function q(){
+      liquidEllipse(cursor.x+qWidth*lowerWidth*halfWidth, cursor.y+lowerHeight*halfHeight/2, qWidth*lowerWidth*halfWidth, lowerHeight*halfHeight/2);
+      liquidLine(cursor.x+qWidth*lowerWidth*width,cursor.y+lowerHeight*halfHeight, cursor.x+qWidth*lowerWidth*width,cursor.y-lowerHeight*halfHeight, lowerLineWidth*width);
+      cursor.x += qWidth*lowerWidth*width + columnSpace*width;
+    }
+    function u(){
+      liquidLine(cursor.x,cursor.y, cursor.x,cursor.y+lowerHeight*halfHeight, lowerLineWidth*width);
+      liquidLine(cursor.x,cursor.y, cursor.x+uWidth*lowerWidth*width,cursor.y, lowerLineWidth*height);
+      liquidLine(cursor.x+uWidth*lowerWidth*width,cursor.y, cursor.x+uWidth*lowerWidth*width,cursor.y+lowerHeight*halfHeight, lowerLineWidth*width);
+      cursor.x += uWidth*lowerWidth*width + columnSpace*width;
+    }
+    function d(){
+      liquidEllipse(cursor.x+dWidth*lowerWidth*halfWidth, cursor.y+lowerHeight*halfHeight/2, dWidth*lowerWidth*halfWidth, lowerHeight*halfHeight/2);
+      liquidLine(cursor.x+dWidth*lowerWidth*width,cursor.y, cursor.x+dWidth*lowerWidth*width,cursor.y+lowerHeight*height, lowerLineWidth*width);
+      cursor.x += dWidth*lowerWidth*width + columnSpace*width;
+    }
+
+    function a(){
+      liquidEllipse(cursor.x+aWidth*lowerWidth*halfWidth, cursor.y+lowerHeight*halfHeight/2, aWidth*lowerWidth*halfWidth, lowerHeight*halfHeight/2);
+      liquidLine(cursor.x+aWidth*lowerWidth*width,cursor.y, cursor.x+aWidth*lowerWidth*width,cursor.y+lowerHeight*halfHeight, lowerLineWidth*width);
+      cursor.x += aWidth*lowerWidth*width + columnSpace*width;
+    }
+    function b(){
+      liquidEllipse(cursor.x+bWidth*lowerWidth*halfWidth, cursor.y+lowerHeight*halfHeight/2, bWidth*lowerWidth*halfWidth, lowerHeight*halfHeight/2);
+      liquidLine(cursor.x,cursor.y, cursor.x,cursor.y+lowerHeight*height, lowerLineWidth*width);
+      cursor.x += bWidth*lowerWidth*width + columnSpace*width;
+    }
+    function y(){
+      liquidLine(cursor.x,cursor.y-lowerHeight*halfHeight, cursor.x+yWidth*lowerWidth*width,cursor.y+lowerHeight*halfHeight, lowerLineWidth*width);
+      liquidLine(cursor.x,cursor.y+yWidth*lowerWidth*width, cursor.x+yWidth*lowerWidth*halfWidth,cursor.y, lowerLineWidth*width);
+      cursor.x += yWidth*lowerWidth*width + columnSpace*width;
+    }
+    function r(){
+      liquidLine(cursor.x,cursor.y, cursor.x,cursor.y+lowerHeight*halfHeight, lowerLineWidth*width);
+      liquidLine(cursor.x,cursor.y+lowerHeight*halfHeight, cursor.x+rWidth*lowerWidth*width,cursor.y+lowerHeight*halfHeight, lowerLineWidth*height);
+      liquidLine(cursor.x+rWidth*lowerWidth*width,cursor.y+lowerHeight*halfHeight, cursor.x+rWidth*lowerWidth*width,cursor.y+lowerHeight*halfHeight*3/4, lowerLineWidth*height);
+      cursor.x += rWidth*lowerWidth*width + columnSpace*width;
+    }
+    function n(){
+      liquidLine(cursor.x,cursor.y, cursor.x,cursor.y+lowerHeight*halfHeight, lowerLineWidth*width);
+      liquidLine(cursor.x,cursor.y+lowerHeight*halfHeight, cursor.x+nWidth*lowerWidth*width,cursor.y+lowerHeight*halfHeight, lowerLineWidth*height);
+      liquidLine(cursor.x+nWidth*lowerWidth*width,cursor.y, cursor.x+nWidth*lowerWidth*width,cursor.y+lowerHeight*halfHeight, lowerLineWidth*width);
+      cursor.x += nWidth*lowerWidth*width + columnSpace*width;
+    }
+    function t(){
+      liquidLine(cursor.x+tWidth*lowerWidth*halfWidth,cursor.y, cursor.x+tWidth*lowerWidth*halfWidth,cursor.y+lowerHeight*height, lowerLineWidth*width);
+      liquidLine(cursor.x,cursor.y+lowerHeight*halfHeight, cursor.x+tWidth*lowerWidth*width,cursor.y+lowerHeight*halfHeight, lowerLineWidth*height);
+      cursor.x += tWidth*lowerWidth*width + columnSpace*width;
+    }
+    function h(){
+      liquidLine(cursor.x,cursor.y, cursor.x,cursor.y+lowerHeight*height, lowerLineWidth*width);
+      liquidLine(cursor.x,cursor.y+lowerHeight*halfHeight, cursor.x+hWidth*lowerWidth*width,cursor.y+lowerHeight*halfHeight, lowerLineWidth*height);
+      liquidLine(cursor.x+hWidth*lowerWidth*width,cursor.y, cursor.x+hWidth*lowerWidth*width,cursor.y+lowerHeight*halfHeight, lowerLineWidth*width);
+      cursor.x += hWidth*lowerWidth*width + columnSpace*width;
+    }
+
+    function Y(){
+      liquidLine(cursor.x,cursor.y, cursor.x+Ywidth*upperWidth*width,cursor.y+upperHeight*height, upperLineWidth*width);
+      liquidLine(cursor.x,cursor.y+upperHeight*height, cursor.x+Ywidth*upperWidth*halfWidth,cursor.y+upperHeight*halfHeight, upperLineWidth*width);
+      cursor.x += yWidth*upperWidth*width + columnSpace*width;
+    }
+    function o(){
+      liquidEllipse(cursor.x+oWidth*lowerWidth*halfWidth, cursor.y+lowerHeight*halfHeight/2, oWidth*lowerWidth*halfWidth, lowerHeight*halfHeight/2);
+      cursor.x += oWidth*lowerWidth*width + columnSpace*width;
+    }
+    function _(){
+      cursor.x += _width*lowerWidth*width + columnSpace*width;
+    }
+    function D(){
+      liquidLine(cursor.x,cursor.y, cursor.x,cursor.y+upperHeight*height, upperLineWidth*width);
+      liquidLine(cursor.x,cursor.y, cursor.x+Dwidth*upperWidth*halfWidth,cursor.y, upperLineWidth*width);
+      liquidLine(cursor.x,cursor.y+upperHeight*height, cursor.x+Dwidth*upperWidth*halfWidth,cursor.y+upperHeight*height, upperLineWidth*width);
+      liquidLine(cursor.x+Dwidth*upperWidth*halfWidth,cursor.y, cursor.x+Dwidth*upperWidth*width, cursor.y+upperHeight*halfHeight, upperLineWidth*width);
+      liquidLine(cursor.x+Dwidth*upperWidth*halfWidth,cursor.y+upperHeight*height, cursor.x+Dwidth*upperWidth*width, cursor.y+upperHeight*halfHeight, upperLineWidth*width);
+      cursor.x += Dwidth*upperWidth*width + columnSpace*width;
+    }
+    function e(){
+      liquidLine(cursor.x,cursor.y, cursor.x,cursor.y+lowerHeight*halfHeight, lowerLineWidth*height);
+      liquidLine(cursor.x,cursor.y, cursor.x+eWidth*lowerWidth*width,cursor.y, lowerLineWidth*height);
+      liquidLine(cursor.x,cursor.y+lowerHeight*halfHeight*2/3, cursor.x+eWidth*lowerWidth*width,cursor.y+lowerHeight*halfHeight*2/3, lowerLineWidth*height);
+      liquidLine(cursor.x,cursor.y+lowerHeight*halfHeight, cursor.x+eWidth*lowerWidth*width,cursor.y+lowerHeight*halfHeight, lowerLineWidth*height);
+      liquidLine(cursor.x+eWidth*lowerWidth*width,cursor.y+lowerHeight*halfHeight, cursor.x+eWidth*lowerWidth*width,cursor.y+lowerHeight*halfHeight*2/3, lowerLineWidth*width);
+      cursor.x += eWidth*lowerWidth*width + columnSpace*width;
+    }
+
+    switch(string){
+      case 0:   //liquid 
+              //labyrinth
+        startLiquidText = [];
+        cursor = new point(
+          -(Lwidth*upperWidth+(2*iWidth+qWidth+uWidth+dWidth)*lowerWidth+5*columnSpace)*halfWidth,
+          rowSpace*halfHeight+height/15
+          );
+        L();
+        i();
+        q();
+        u();
+        i();
+        d();
+        cursor.x = -(Lwidth*upperWidth+(aWidth+bWidth+yWidth+rWidth+iWidth+nWidth+tWidth+hWidth)*lowerWidth+8*columnSpace)*halfWidth;
+        cursor.y -= rowSpace*height + lowerHeight*height;
+        L();
+        a();
+        b();
+        y();
+        r();
+        i();
+        n();
+        t();
+        h();
+        break;
+      case 1:  //You Died
+        deathLiquidText = 0;
+        deathLiquidText = [];
+        cursor = new point(
+          -((Ywidth+Dwidth)*upperWidth+(oWidth+uWidth+_width+iWidth+eWidth+dWidth)*lowerWidth+7*columnSpace)*halfWidth,
+          height/8
+          );
+        Y();
+        o();
+        u();
+        _();
+        D();
+        i();
+        e();
+        d();
+        break;
+    }
+  }
+  function startScreen(){
+    if(!started){
+      if(transitionT <= 2*transitionBoxT){
+        if(transitionT < transitionBoxT){
+          mapStage(0);
+        }else{
+          transitionT -= transitionBoxT;
+          playText.innerHTML = "Press Enter to Play";
+          playText.style.color = `hsla(${playerHue},100%,50%, ${2*transitionT/transitionBoxT-1})`;
+          mapStage(1);
+          transitionT += transitionBoxT;
+        }
+        transitionT = Math.min(transitionT+deltaTime, 2*transitionBoxT);
+      }
+      if(start && transitionT===2*transitionBoxT){
+        started = true;
+        transitionT = 0;
+        start = false;
+        distText.innerHTML = "Current Distance: " + currentDist + "<br>Best Distance: " + highScore;
+        instructionsText.innerHTML = "Go far and avoid the black walls";
+      }
+    }
+    if(started){
+      if(transitionT < transitionBoxT){
+        mapStage(2);
+        playerFade = transitionT/transitionBoxT;
+        var instructFadeSpeed = 3;
+        distText.style.color = `hsla(${playerHue},100%,50%, ${playerFade})`;
+        playText.style.color = `hsla(${playerHue},100%,50%, ${1-2*playerFade})`;
+        if(playerFade <= 1/instructFadeSpeed){
+          instructionsText.style.color = `hsla(${playerHue},100%,50%, ${instructFadeSpeed*playerFade})`;
+        }else if(playerFade >= 1-1/instructFadeSpeed){
+          instructionsText.style.color = `hsla(${playerHue},100%,50%, ${1-instructFadeSpeed*(playerFade-1+1/instructFadeSpeed)})`;
+        }
+        transitionT += deltaTime/1.5;
+      }else{
+        playable = true;
+        starting = false;
+        transitionT = 0;
+        playerFade = 1;
+        distText.style.color = `hsla(${playerHue},100%,50%, 1)`;
+        playText.innerHTML = "";
+        instructionsText.innerHTML = "";
+      }
+    }
+  }
+  function deathScreen(){
+    var margin = 0.00001;
+    if(!alive){
+      if(viewerCoord.t < vtNext){
+        mapStage(3);
+      }else if(viewerCoord.t <= vtNext+boxT-margin){
+        mapStage(4);
+        playerFade = 1 - transitionT/transitionBoxT;
+
+        distText.style.color = `hsla(${playerHue},100%,50%, ${playerFade})`;
+        finalDistText.style.color = `hsla(${playerHue},100%,50%, ${1-2*playerFade})`;
+        highScoreText.style.color = `hsla(${playerHue},100%,50%, ${1-2*playerFade})`;
+        restartText.style.color = `hsla(${playerHue},100%,50%, ${1-2*playerFade})`;
+        restartText.innerHTML = "Press Enter to Restart";
+        newHighScoreText.style.color = `hsla(${playerHue},100%,50%, ${1-2*playerFade})`;
+        
+        if(viewerCoord.t === vtNext+boxT-margin){
+          distText.innerHTML = "";
+        }
+        transitionT += deltaTime;
+      }
+
+      if(start && viewerCoord.t === vtNext+boxT-margin){
+        health = 2*healthMax;
+        startCoord.x = viewerCoord.x % boxDim;
+        startCoord.y = viewerCoord.y % boxDim;
+        viewerCoord = new point(startCoord.x, startCoord.y, newT());
+        string = 1;
+        liquidText();
+        alive = true;
+        transitionT = 0;
+        start = false;
+        currentDist = 0;
+        distText.innerHTML = "Current Distance: " + 0 + "<br>Best Distance: " + highScore;
+      }else{
+        viewerCoord.t = Math.min(viewerCoord.t+deltaTime*boxT/transitionBoxT, vtNext+boxT-margin);
+      }
+    }
+    if(alive){
+      if(transitionT < transitionBoxT){
+        mapStage(5);
+        playerFade = transitionT/transitionBoxT;
+
+        distText.style.color = `hsla(${playerHue},100%,50%, ${playerFade})`;
+        finalDistText.style.color = `hsla(${playerHue},100%,50%, ${1-2*playerFade})`;
+        highScoreText.style.color = `hsla(${playerHue},100%,50%, ${1-2*playerFade})`;
+        restartText.style.color = `hsla(${playerHue},100%,50%, ${1-2*playerFade})`;
+        if(newHighScore){
+          newHighScoreText.style.color = `hsla(${playerHue},100%,50%, ${1-2*playerFade})`;
+        }
+        transitionT += deltaTime;
+      }else{
+        playerFade = 1;
+
+        distText.style.color = `hsla(${playerHue},100%,50%,1)`;
+        finalDistText.innerHTML = "";
+        highScoreText.innerHTML = "";
+        restartText.innerHTML = "";
+
+        playable = true;
+        transitionT = 0;
+      }
+    }
+  }
+  function newDims(){
+    if(!windowChange){return 0;}
+    resizeWindow();
+
+    viewerCoord.x /= boxDim;
+    viewerCoord.y /= boxDim;
+    startCoord.x /= boxDim;
+    startCoord.y /= boxDim;
+
+    boxDim = Math.sqrt(width*height*boxAreaToWindow);
+    lilBoxDim = boxDim/boxAccuracy;
+    halfLilBoxDim = lilBoxDim/2;
+    midBoxDim = halfLilBoxDim/2;;
+    midBoxWidth = halfLilBoxDim*Math.sqrt(2)+1;
+
+    viewerCoord.x *= boxDim;
+    viewerCoord.y *= boxDim;
+    startCoord.x *= boxDim;
+    startCoord.y *= boxDim;
+
+    playText.style.width =
+    instructionsText.style.width =
+    newHighScoreText.style.width =
+    finalDistText.style.width =
+    highScoreText.style.width =
+    restartText.style.width = width + "px";
+    
+    playerR = boxDim / playerRFraction;
+    var fontSize = playerR*distTextPlayerRatio;
+
+    distText.style.fontSize = 
+    playText.style.fontSize = 
+    instructionsText.style.fontSize = 
+    newHighScoreText.style.fontSize = 
+    finalDistText.style.fontSize = 
+    highScoreText.style.fontSize = 
+    restartText.style.fontSize = fontSize + "px";
+
+
+    var rowSpace = fontSize;
+    var distTop =  fontSize/3;
+    var playTop = rowSpace/2;
+    var instructTop = playTop + fontSize + rowSpace;
+    var newHighScoreTop = height*0.5;
+    var finalDistTop = newHighScoreTop + fontSize + rowSpace;
+    var highScoreTop = finalDistTop + fontSize + rowSpace;
+    var restartTop = highScoreTop + 2*fontSize + 2*rowSpace;
+
+    distText.style.left =
+    distText.style.top = distTop + "px";
+    playText.style.top = playTop + "px";
+    instructionsText.style.top = instructTop + "px";
+    newHighScoreText.style.top = newHighScoreTop + "px";
+    finalDistText.style.top = finalDistTop + "px";
+    highScoreText.style.top = highScoreTop + "px";
+    restartText.style.top = restartTop + "px";
+
+    moveSpeed = boxDim / moveSpeedFraction;
+    diagonalMoveAmount = vectorMath(new point(1,1),'to',moveSpeed).x;
+    
+    string = 0;
+    liquidText();
+    string = 1;
+    liquidText();
+
+    windowChange = false;
+  }
+  var highScore = 1775;
+  var currentDist = 0;
+  var distScale = 50;
+
+  var playText = document.getElementById("play");
+  var instructionsText = document.getElementById("instructions");
+  var distText = document.getElementById("dist");
+  var newHighScoreText = document.getElementById("newHighScore");
+  var finalDistText = document.getElementById("finalDist");
+  var highScoreText = document.getElementById("highScore");
+  var restartText = document.getElementById("restart");
+
+  var boxAreaToWindow = 0.1;
+  var boxDim = Math.sqrt(width*height*boxAreaToWindow);
+  var boxAccuracy = 15;
+  var lilBoxDim = boxDim/boxAccuracy;
+  var halfLilBoxDim = lilBoxDim/2;
+  var midBoxDim = halfLilBoxDim/2;
+  var midBoxWidth = halfLilBoxDim*Math.sqrt(2)+1;
+  var startStrength = 0.5;
+
+  var boxT = 8000;
+  var startCoord = new point(0,0);
+  var viewerCoord = new point(startCoord.x, startCoord.y, newT());
+  var playerRFraction = 25;
+  var playerR = boxDim / playerRFraction;
+  var distTextPlayerRatio = 2;
+  var moveSpeedFraction = 800;
+  var moveSpeed = boxDim / moveSpeedFraction;
+
+  var vtNext;
+  var transitionBoxT = 2200;
+  var transitionT = transitionBoxT/3;
+  var transitionStartT = newT();
+
+  var playerHue = 210;
+  var damageHue = playerHue-180;
+  var shieldHue = playerHue-15;
+  var playerFade = 0;
+
+  var healthMax = Math.PI*2;
+  var health = healthMax*2;
+  var healthRecharge = 0.0006;
+  var damage = 0.008;
+  var shieldDegrade = 0.005;
+  var gotDamage = false;
+
+  var sampPoints2d = [];
+  xyWeights();
+
+  var wallThreshold = 0;
+  var blank = -0.5;
+  var wall = 0.4;
+
+  var windowChange = true;
+
+  var startLiquidText;
+  var deathLiquidText;
+  var string = 0;
+  liquidText();
+
+  var starting = true;
+  var start = false;
+  var started = false;
+  var alive = true;
+  var playable = false;
+  var right = false;
+  var left = false;
+  var up = false;
+  var down = false;
+  var diagonalMoveAmount = vectorMath(new point(1,1),'to',moveSpeed).x;
+
+  function draw(){
+    background(255);
+    cTime = new Date().getTime();
+    deltaTime = cTime - pTime;
+    newDims();
+    if(starting){
+      startScreen();
+    }else if(!playable){
+      deathScreen();
+    }
+    if(alive && playable){
+      updateViewer();
+      currentDist = Math.floor(vectorMath(vectorMath(viewerCoord,'-',startCoord),'m') / distScale);
+      distText.innerHTML = "Current Distance: " + currentDist + "<br>Best Distance: " + highScore;
+      mapStage(3);
+      if(gotDamage){
+        if(health <= healthMax){
+          health -= damage*deltaTime;
+        }
+        gotDamage = false;
+      }
+    }
+    drawViewer();
+
+    if(alive && health <= 0){
+      vtNext = Math.ceil(viewerCoord.t/boxT)*boxT;
+      if(currentDist > highScore){
+        newHighScoreText.innerHTML = "New High Score!";
+        highScore = currentDist;
+      }else{
+        newHighScoreText.innerHTML = "";
+      }
+      finalDistText.innerHTML = "Final Distance: " + currentDist;
+      highScoreText.innerHTML = "Best Distance: " + highScore;
+      alive = false;
+      playable = false;
+      start = false;
+      string = 1;
+      liquidText();
+    }
+    pTime = cTime;
+  }
+  var cTime, deltaTime;
+  var pTime = new Date().getTime();
+
+  var drawing = setInterval(draw, timePx);
+  
+  function key(char){return char.charCodeAt()-32;}
+  function keyDown(e){
+    //dp(e.keyCode);
+    switch(e.keyCode){
+      case key('d'):;
+      case 39: right = true;break;
+      case key('a'):;
+      case 37: left = true;break;
+      case key('w'):;
+      case 38: up = true;break;
+      case key('s'):;
+      case 40: down = true;break;
+      case key('r'): windowChange = true;break;
+    }
+  }
+  function keyUp(e){
+    switch(e.keyCode){
+      case key('d'):;
+      case 39: right = false;break;
+      case key('a'):;
+      case 37: left = false;break;
+      case key('w'):;
+      case 38: up = false;break;
+      case key('s'):;
+      case 40: down = false;break;
+      case 91:; //start flag
+      case 122: windowChange = true;break;  //f11
+      case 13: if(!playable){start = true;}break; //enter
+    }
+  }
+  document.addEventListener("keydown", keyDown);
+  document.addEventListener("keyup", keyUp);
+</script>
+</body>
